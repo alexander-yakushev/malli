@@ -3637,3 +3637,19 @@
   (testing "print Schema"
     (is (= "[:map [:x :int]]"
            (pr-str (m/schema [:map [:x :int]]))))))
+
+(deftest recursive-coercer-test
+  (let [count-into-schemas (atom 0)
+        reg (mr/simple-registry (assoc (m/default-schemas)
+                                       ::counting (m/-proxy-schema {:type ::counting
+                                                                    :fn (fn [p c o]
+                                                                          (assert (empty? c))
+                                                                          (swap! count-into-schemas inc)
+                                                                          [[] [] (m/schema :int o)])})))
+        ConsCell (m/schema [:schema {:registry {::cons [:maybe [:tuple ::counting [:ref ::cons]]]}} ::cons]
+                           {:registry reg})]
+    (is (= @count-into-schemas 2))
+    (is (m/coerce ConsCell [1 [2 [3 [4 nil]]]]))
+    (is (= 3 @count-into-schemas)) ;; was 6
+    (is (m/coerce ConsCell [1 [2 [3 [4 [1 [2 [3 [4 nil]]]]]]]]))
+    (is (= 3 @count-into-schemas)))) ;; was 10

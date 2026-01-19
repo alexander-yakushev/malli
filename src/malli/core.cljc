@@ -1983,13 +1983,17 @@
            (-parser [_] (->parser -parser))
            (-unparser [_] (->parser -unparser))
            (-transformer [this transformer method options]
-             (let [key [(-identify-ref-schema this) method]]
-               (or (some-> (get-in options [::ref-transformer-cache key]) clojure.core/deref)
+             (let [key [(-identify-ref-schema this) method]
+                   options (if (::ref-transformer-cache options)
+                             options
+                             (assoc options ::ref-transformer-cache (java.util.HashMap.)))
+                   ^java.util.Map cache (::ref-transformer-cache options)]
+               (or (some-> (get cache key) clojure.core/deref)
                    (let [knot (atom nil)
+                         _ (.put cache key knot)
                          this-transformer (-value-transformer transformer this method options)
                          deref-transformer (-memoize
-                                            (fn [] (-transformer (rf) transformer method
-                                                                 (assoc-in options [::ref-transformer-cache key] knot))))
+                                            (fn [] (-transformer (rf) transformer method options)))
                          f (-intercepting this-transformer (fn [x] (if-some [t (deref-transformer)] (t x) x)))]
                      (compare-and-set! knot nil f)
                      f))))
